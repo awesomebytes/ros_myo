@@ -191,6 +191,7 @@ class MyoRaw(object):
         self.imu_handlers = []
         self.arm_handlers = []
         self.pose_handlers = []
+        self.vibration_requested = None
 
     def detect_tty(self):
         for p in comports():
@@ -202,6 +203,9 @@ class MyoRaw(object):
 
     def run(self, timeout=None):
         self.bt.recv_packet(timeout)
+        if self.vibration_requested:
+            self.vibrate(self.vibration_requested)
+            self.vibration_requested = None
 
     def connect(self):
         ## stop everything from before
@@ -382,13 +386,15 @@ if __name__ == '__main__':
             rospy.sleep(0.5)
             pass
 
+    rospy.init_node('myo_raw', anonymous=True)
+
     # Define Publishers
     imuPub = rospy.Publisher('myo_imu', Imu, queue_size=10)
     emgPub = rospy.Publisher('myo_emg', EmgArray, queue_size=10)
     armPub = rospy.Publisher('myo_arm', MyoArm, queue_size=10)
     gestPub = rospy.Publisher('myo_gest', UInt8, queue_size=10)
 
-    rospy.init_node('myo_raw', anonymous=True)
+
 
     # Package the EMG data into an EmgArray
     def proc_emg(emg, moving, times=[]):
@@ -438,8 +444,16 @@ if __name__ == '__main__':
 
     m.connect()
 
-    try:
 
+    # Add a way to vibrate
+    def vibrate_cb(data):
+        print("Received vibrate msg: " + str(data))
+        # This will be checked on every m.run() call
+        m.vibration_requested = data.data
+
+    vibSubs = rospy.Subscriber('myo_vib', UInt8, vibrate_cb, queue_size=10)
+
+    try:
         while not rospy.is_shutdown():
             m.run(1)
 
